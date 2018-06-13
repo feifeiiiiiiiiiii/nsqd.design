@@ -33,9 +33,9 @@
 
         writeChan         chan []byte   // 消息写入的channel
         writeResponseChan chan error    
-        emptyChan         chan int
-        emptyResponseChan chan error
-        exitChan          chan int
+        emptyChan         chan int      // 清空队列 对应接口 Empty()
+        emptyResponseChan chan error    
+        exitChan          chan int      // 关闭 对应接口是 Close
         exitSyncChan      chan int
 
         logf AppLogFunc
@@ -59,3 +59,105 @@
 
 
 数据存储
+    
+    数据存储的内容:
+        dataLen(消息的大小,转换大端存储),消息内容(data)
+
+    文件命名:
+        name = dataPath + name + ".diskqueue.%06d.dat" + fileNum
+
+    存储格式:
+        BigEndian(dataLen)+Binary(data)
+
+# 对外提供的接口 #
+
+API列表
+
+    New(...)                // 创建diskQueue实例
+
+    Put([]byte) error       // 队列中放入消息
+
+	ReadChan() chan []byte  // 读取消息
+	
+    Close() error           // 关闭diskQueue
+	
+    Delete() error          // 删除队列
+	
+    Depth() int64           // 获取当前队列的消息数量
+	
+    Empty() error           // 清空队列
+
+# 处理流程 #
+
+创建队列
+
+    调用 New(...) 创建队列
+        
+        1. 创建 diskQueue实例 (d)
+
+        2. 调用函数 `retrieveMetaData` 读取元数据信息
+        
+        3. 生成一个协程 处理函数是 `ioLoop`, diskQueue最核心的处理
+
+        4. ioLoop 主要逻辑
+
+            var dataRead []byte     // 存储消息
+            var err error
+            var count int64         // 操作(写入、读取)消息的计数器 和 syncEvery 一起决定是否需要flush磁盘的脏数据
+            var r chan []byte       // 用来操作读取消息的chan,所有读取的消息都用chan（管道）的send出去
+
+            syncTicker := time.NewTicker(d.syncTimeout)     // 创建一个syncTimeout的定时器，用来flush磁盘的脏数据
+
+            for {
+                if count == d.syncEvery {
+                    d.needSync = true
+                }
+
+                if d.needSync {
+                    d.sync() // flush磁盘脏数据
+                    count = 0 // 计数器归零
+                }
+
+                // 读取消息 判断消息是否可读
+                if (d.readFileNum < d.writeFileNum) || (d.readPos < d.writePos) {
+                    if d.nextReadPos == d.readPos {
+                        dataRead, err = d.readOne() // 读取一条消息
+                        if err != nil {
+                            d.handleReadError() // 出现读取异常的处理函数
+                            continue
+                        }
+                    }
+                    r = d.readChan
+                } else {
+                    r = nil
+                }
+
+                select {
+                case r <- dataRead:
+                    count++
+                    d.moveForward()
+                case <-d.emptyChan:
+                    // 清空消息的指令
+                    d.emptyResponseChan <- d.deleteAllFiles()
+                    count = 0
+                case dataWrite := <-d.writeChan:
+                    // 处理写入消息的指令
+                    count++
+                    d.writeResponseChan <- d.writeOne(dataWrite)
+                case <-syncTicker.C:
+                    if count == 0 {
+                        // avoid sync when there's no activity
+                        continue
+                    }
+                    d.needSync = true
+                case <-d.exitChan:
+                    goto exit
+                }
+            }
+
+        Tips:
+            ioLoop实现了个CSP(Communicating Sequential Processes)并发模型，所有的操作都是基于chan通讯的,其实nsqd将go的chan玩的最溜了
+
+读取消息
+
+写入消息
