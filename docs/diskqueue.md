@@ -2,7 +2,9 @@
 
 源码地址
 
-    https://github.com/nsqio/go-diskqueue
+    [go-diskqueu源码地址](https://github.com/nsqio/go-diskqueue)
+
+    自己学习用[c版本](https://github.com/feifeiiiiiiiiiii/cnsq/blob/master/src/diskqueue/)
 
 # 数据结构 #
 
