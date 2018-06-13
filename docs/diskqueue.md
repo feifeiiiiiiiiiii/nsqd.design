@@ -1,5 +1,9 @@
 # 消息持久化 #
 
+源码地址
+
+    https://github.com/nsqio/go-diskqueue
+
 # 数据结构 #
 
 定义
@@ -87,6 +91,39 @@ API列表
 	
     Empty() error           // 清空队列
 
+# 私有接口 #
+
+API接口
+
+    exit(deleted bool)      // 清空和关闭调用
+
+    deleteAllFiles()        // 删除队列所有文件
+
+    skipToNextRWFile()      // 确定下一个要读写的文件的位置和编号
+
+    readOne()               // 读取消息
+
+    writeOne()              // 写入消息
+
+    sync()                  // flush数据
+
+    retrieveMetaData()      // 获取meta数据
+
+    persistMetaData()       // 持久化数据
+
+    metaDataFileName()      // 获取meta文件名
+
+    fileName(fileNum int64) // 获取文件编号名字
+
+    checkTailCorruption()   // 检查是否正常
+
+    moveForward()           // 读取下个消息
+
+    handleReadError()       // 处理读取消息错误
+
+    ioLoop()                // 核心函数
+
+
 # 处理流程 #
 
 创建队列
@@ -160,4 +197,9 @@ API列表
 
 读取消息
 
+    更简单，直接从 readChan 中读取，有数据则读取 无数据则阻塞直到有数据可读
+
 写入消息
+
+    很简单 就是 把待写入的消息放入 writeChan 中, 写入的处理逻辑在 ioLoop 中
+
