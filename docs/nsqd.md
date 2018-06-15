@@ -4,11 +4,11 @@
 
 # 名词解释 #
 
-1.[topic](/docs/topic.md) 主题
+1.[topic](/docs/topic.html) 主题
     
     用来发布消息
 
-2.[channel](/docs/channel.md) 频道
+2.[channel](/docs/channel.html) 频道
     
     用来订阅 topic 的消息 同一个topic的消息会广播给改topic下的所有channel
     这里也能看出来topic和channel的关系
